@@ -36,6 +36,14 @@ pub fn clear_bss() {
     (sbss as usize..ebss as usize).for_each(|a| unsafe { (a as *mut u8).write_volatile(0) });
 }
 
+/// my app
+pub fn my_app() {
+    println!("[kernel] run custom app:");
+    for i in 1..10 {
+        println!("[kernel] {}", i);
+    }
+}
+
 /// the rust entry-point of os
 #[no_mangle]
 pub fn rust_main() -> ! {
@@ -54,6 +62,7 @@ pub fn rust_main() -> ! {
     clear_bss();
     logging::init();
     println!("[kernel] Hello, world!");
+    my_app();
     trace!(
         "[kernel] .text [{:#x}, {:#x})",
         stext as usize,
