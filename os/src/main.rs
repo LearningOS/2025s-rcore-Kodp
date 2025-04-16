@@ -37,11 +37,13 @@ pub fn clear_bss() {
 }
 
 /// my app
+#[no_mangle]
 pub fn my_app() {
     println!("[kernel] run custom app:");
     for i in 1..10 {
         println!("[kernel] {}", i);
     }
+
 }
 
 /// the rust entry-point of os
