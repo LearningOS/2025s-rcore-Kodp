@@ -1,6 +1,6 @@
 # Building
 TARGET := riscv64gc-unknown-none-elf
-MODE := release
+MODE := debug
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
 DISASM_TMP := target/$(TARGET)/$(MODE)/asm
@@ -29,6 +29,8 @@ BASE ?= 1
 # Disassembly
 DISASM ?= -x
 
+# 目标: 依赖
+#    命令
 build: env $(KERNEL_BIN)
 
 env:
@@ -37,11 +39,15 @@ env:
 	rustup component add rust-src
 	rustup component add llvm-tools-preview
 
+#@ 用objcopy把ELF文件（$(KERNEL_ELF)）转成二进制文件（$(KERNEL_BIN)）。
+# --strip-all去掉调试信息，-O binary输出二进制格式，@$表示目标文件本身。
 $(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
 
+#@ 编译内核代码
 kernel:
-	@make -C ../user build TEST=$(TEST) CHAPTER=$(CHAPTER) BASE=$(BASE)
+    # 在user下面build
+	@make -C ../user build TEST=$(TEST) CHAPTER=$(CHAPTER) BASE=$(BASE)  
 	@echo Platform: $(BOARD)
 	@cargo build $(MODE_ARG)
 
@@ -56,8 +62,18 @@ disasm-vim: kernel
 	@vim $(DISASM_TMP)
 	@rm $(DISASM_TMP)
 
+disasm-lvim: kernel
+	@$(OBJDUMP) -d -j .text $(KERNEL_ELF) > $(DISASM_TMP)
+	@vim $(DISASM_TMP)
+	@rm $(DISASM_TMP)
+
 run: run-inner
 
+#@ 用QEMU模拟器运行内核
+# -machine virt：模拟RISC-V Virt机器。
+# -nographic：无图形界面，只用终端。
+# -bios $(BOOTLOADER)：加载引导程序。
+# -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA)：加载内核二进制到指定地址。
 run-inner: build
 	@qemu-system-riscv64 \
 		-machine virt \
@@ -65,10 +81,12 @@ run-inner: build
 		-bios $(BOOTLOADER) \
 		-device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA)
 
+gdb := RUST_GDB=$(GDB_PATH) rust-gdb
+
 debug: build
-	@tmux new-session -d \
+	tmux new-session -d \
 		"qemu-system-riscv64 -machine virt -nographic -bios $(BOOTLOADER) -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA) -s -S" && \
-		tmux split-window -h "riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'" && \
+		tmux split-window -h "rust-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'" && \
 		tmux -2 attach-session -d
 
 gdbserver: build

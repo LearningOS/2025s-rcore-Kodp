@@ -23,7 +23,7 @@ use riscv::register::{
     stval, stvec,
 };
 
-global_asm!(include_str!("trap.S"));
+global_asm!(include_str!("./trap.S"));
 
 /// initialize CSR `stvec` as the entry of `__alltraps`
 pub fn init() {
@@ -40,11 +40,16 @@ pub fn init() {
 pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
     let scause = scause::read(); // get trap cause
     let stval = stval::read(); // get extra value
+
     match scause.cause() {
+        //@ 处理系统调用
         Trap::Exception(Exception::UserEnvCall) => {
-            cx.sepc += 4;
+            cx.sepc += 4;  // 让spec指向发生异常的指令的下一条指令
+            // 从trap上下文取出syscall ID的x17(a7)和系统调用的三个参数 a0~a2, 传给 syscall 函数并获取返回值
             cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize;
+            // x10就是a0，a0~a7<=>x10~x17
         }
+        //@ 处理访存错误和非法指令错误
         Trap::Exception(Exception::StoreFault) | Trap::Exception(Exception::StorePageFault) => {
             println!("[kernel] PageFault in application, kernel killed it.");
             run_next_app();
@@ -61,7 +66,7 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
             );
         }
     }
-    cx
+    cx  // 将传入的上下文原封返回
 }
 
 pub use context::TrapContext;
