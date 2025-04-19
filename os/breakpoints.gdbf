@@ -1,0 +1,9 @@
+break rust_main
+break os::task::run_first_task
+break os::task::run_next_task
+break __switch
+break __alltraps
+break __restore
+break os::syscall::process::sys_yield
+break os::syscall::process::sys_exit
+break os::trap::context::TrapContext::app_init_context

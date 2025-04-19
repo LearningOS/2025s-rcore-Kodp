@@ -27,8 +27,12 @@ mod process;
 use fs::*;
 use process::*;
 
+use crate::task::add_syscall_times;
+
 /// handle syscall exception with `syscall_id` and other arguments
+/// 参考 [清华大学云盘ch3](https://cloud.tsinghua.edu.cn/d/eec08e3c8f224e27b01d/files/?p=%2Frcore%20%E5%AE%9E%E9%AA%8C%E4%B8%89%20%E9%A9%AC%E6%80%9D%E6%BA%90.mp4)
 pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
+    add_syscall_times(syscall_id);
     match syscall_id {
         SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
         SYSCALL_EXIT => sys_exit(args[0] as i32),

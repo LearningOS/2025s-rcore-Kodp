@@ -13,6 +13,9 @@ __alltraps:
     csrrw sp, sscratch, sp
     # now sp->kernel stack, sscratch->user stack
     # allocate a TrapContext on kernel stack
+    #! TrapContext 改了，这里也需要分配更多的内存！
+    # 在Makefile里设置Mode=debug的时候发现了这里之前没有增加内存分配的问题，体现为，
+    # 代码越界写入，覆盖了__alltraps底部的代码段导致执行错误
     addi sp, sp, -34*8
     # save general-purpose registers
     sd x1, 1*8(sp)
@@ -35,7 +38,9 @@ __alltraps:
     sd t2, 2*8(sp)
     # set input argument of trap_handler(cx: &mut TrapContext)
     mv a0, sp
-    call trap_handler
+    # call trap_handler
+    la  t0, trap_handler   
+    jalr ra, t0
 
 __restore:
     # now sp->kernel stack(after allocated), sscratch->user stack

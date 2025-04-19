@@ -14,7 +14,7 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::config::MAX_APP_NUM;
+use crate::config::{MAX_APP_NUM, MAX_SYSCALL_NUM};
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
 use lazy_static::*;
@@ -23,27 +23,27 @@ pub use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
 
-/// The task manager, where all the tasks are managed.
+/// 任务管理器，负责所有任务的管理与调度。
 ///
-/// Functions implemented on `TaskManager` deals with all task state transitions
-/// and task context switching. For convenience, you can find wrappers around it
-/// in the module level.
+/// `TaskManager` 的方法实现了任务状态转换和上下文切换的核心逻辑。
+/// 模块层面提供了更易用的封装函数（可参考现有函数对 `inner` 的使用）。
 ///
-/// Most of `TaskManager` are hidden behind the field `inner`, to defer
-/// borrowing checks to runtime. You can see examples on how to use `inner` in
-/// existing functions on `TaskManager`.
+/// 通过 `inner` 字段将借用检查推迟到运行时，其内部封装了：
+/// - 使用 `UPSafeCell` 实现线程安全的内部可变访问
+/// - 通过 `exclusive_access()` 方法获取可变引用
 pub struct TaskManager {
-    /// total number of tasks
+    /// 任务总数
     num_app: usize,
-    /// use inner value to get mutable access
+    /// 通过内部可变性实现运行时借用检查的安全抽象
     inner: UPSafeCell<TaskManagerInner>,
 }
 
-/// Inner of Task Manager
+/// 任务管理器内部数据结构
 pub struct TaskManagerInner {
-    /// task list
+    /// TaskControlBlock 任务列表
+    /// TaskControlBlock: [TaskStatus, TaskContext]
     tasks: [TaskControlBlock; MAX_APP_NUM],
-    /// id of current `Running` task
+    /// "Running" 任务的id
     current_task: usize,
 }
 
@@ -54,8 +54,13 @@ lazy_static! {
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
+            syscall_times: [0; MAX_SYSCALL_NUM],
         }; MAX_APP_NUM];
+        // 初始化每一个应用
         for (i, task) in tasks.iter_mut().enumerate() {
+            // init_app_cx(i) 向内核栈[i]推一个TrapContext， 然后goto_restore进入
+            // __restore从内核栈[i]里的 TrapContext 加载所有寄存器，然后增加栈指针、释放 TrapContext 的栈内存。
+            // 应用初始的 TrapContext很简单，通用寄存器为0，sepc 为该程序的入口地址（入口地址是get_base_i算出来的）
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
             task.task_status = TaskStatus::Ready;
         }
@@ -119,22 +124,49 @@ impl TaskManager {
     /// or there is no `Ready` task and we can exit with all applications completed
     fn run_next_task(&self) {
         if let Some(next) = self.find_next_task() {
+            // 获取任务列表的独占访问权
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
+            // 更新新任务的状态
             inner.tasks[next].task_status = TaskStatus::Running;
             inner.current_task = next;
+            // 获取新旧任务的上下文指针
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
-            drop(inner);
+            drop(inner);  // ! 显式释放 inner 的锁，避免在持有锁时切换上下文
             // before this, we should drop local variables that must be dropped manually
             unsafe {
                 __switch(current_task_cx_ptr, next_task_cx_ptr);
             }
+            //  上下文切换完成后会从此处继续执行
             // go back to user mode
         } else {
             panic!("All applications completed!");
         }
     }
+    /// 任务控制块中 syscall_id 的次数加一
+    pub fn add_syscall_times(&self, syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].syscall_times[syscall_id] += 1;
+    }
+
+    /// 获取任务控制块中 syscall_id 的次数
+    pub fn get_syscall_times(&self) -> [u32; MAX_SYSCALL_NUM] {
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].syscall_times
+    }
+}
+
+/// add_syscall_times外部接口
+pub fn add_syscall_times(syscall_id: usize) {
+    TASK_MANAGER.add_syscall_times(syscall_id);
+}
+
+/// 获取任务控制块中 syscall_id 的次数
+pub fn get_syscall_times() -> [u32; MAX_SYSCALL_NUM] {
+    TASK_MANAGER.get_syscall_times()
 }
 
 /// Run the first task in task list.
