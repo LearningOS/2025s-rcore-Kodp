@@ -39,6 +39,12 @@ jobs:
           git config --global --add safe.directory /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}
           git clone https://github.com/LearningOS/rCore-Tutorial-Checker-2025S.git ci-user
           git clone https://github.com/LearningOS/rCore-Tutorial-Test-2025S.git ci-user/user
+          # 删除子项目的工具链配置
+          rm -f ci-user/rust-toolchain*
+          rm -f ci-user/user/rust-toolchain*
+          # 同步主项目配置
+          cp rust-toolchain.toml ci-user/
+          cp rust-toolchain.toml ci-user/user/
           ID=`git rev-parse --abbrev-ref HEAD | grep -oP 'ch\K[0-9]'`
           # cd ci-user && make test CHAPTER=$ID passwd=${{ secrets.BASE_TEST_TOKEN }}
           cd ci-user && make test CHAPTER=$ID passwd=${{ secrets.BASE_TEST_TOKEN }} > ../output.txt
