@@ -40,11 +40,17 @@ jobs:
           rm ${CARGO_HOME}/config.toml || true
           rm -rf rm ${CARGO_HOME}/registry/* || true
       - uses: actions/checkout@v4
+      # 新增工具链配置步骤
+      - name: Setup Rust Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+          components: rust-src, llvm-tools
+          targets: riscv64gc-unknown-none-elf
       - name: Run tests
         run: |
-          rustup target add riscv64gc-unknown-none-elf
-          rustup target add riscv64gc-unknown-none-elf
-          rustup target add riscv64gc-unknown-none-elf
           rustup target add riscv64gc-unknown-none-elf
           qemu-system-riscv64 --version
           rustup target add riscv64gc-unknown-none-elf
@@ -53,7 +59,9 @@ jobs:
           git clone https://github.com/LearningOS/rCore-Tutorial-Test-2025S.git ci-user/user
           ID=`git rev-parse --abbrev-ref HEAD | grep -oP 'ch\K[0-9]'`
           # cd ci-user && make test CHAPTER=$ID passwd=${{ secrets.BASE_TEST_TOKEN }}
-          cd ci-user && make test CHAPTER=$ID passwd=${{ secrets.BASE_TEST_TOKEN }} > ../output.txt
+          # 修改构建命令
+          cd ci-user && make test CHAPTER=$ID passwd=${{ secrets.BASE_TEST_TOKEN }} \
+            CARGOFLAGS="-Z build-std=core,compiler_builtins" > ../output.txt
           cat ../output.txt
       - name: end
         id: end
