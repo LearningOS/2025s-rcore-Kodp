@@ -42,6 +42,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run tests
         run: |
+          rustup target add riscv64gc-unknown-none-elf
+          rustup target add riscv64gc-unknown-none-elf
+          rustup target add riscv64gc-unknown-none-elf
+          rustup target add riscv64gc-unknown-none-elf
           qemu-system-riscv64 --version
           rustup target add riscv64gc-unknown-none-elf
           git config --global --add safe.directory /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}
