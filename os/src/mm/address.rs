@@ -70,6 +70,7 @@ impl From<usize> for VirtPageNum {
 }
 impl From<PhysAddr> for usize {
     fn from(v: PhysAddr) -> Self {
+    // 我们在声明结构体的时候将字段公开了出来，从物理地址变量 pa 得到它的 usize 表示的更简便方法是直接 pa.0 。
         v.0
     }
 }
@@ -146,25 +147,29 @@ impl PhysAddr {
 impl From<PhysAddr> for PhysPageNum {
     fn from(v: PhysAddr) -> Self {
         assert_eq!(v.page_offset(), 0);
-        v.floor()
+        v.floor()  // 除以 PAGE_SIZE 来得到页号
     }
 }
 impl From<PhysPageNum> for PhysAddr {
     fn from(v: PhysPageNum) -> Self {
+    // 物理页号 PhysPageNum v.0 可以看作是页的索引（例如，页号 0 是第一个页，页号 1 是第二个页，以此类推）。
+    // 要计算第 v.0 个页的起始物理地址 PhysAddr，就是 v.0 * PAGE_SIZE === v.0 << PAGE_SIZE_BITS
         Self(v.0 << PAGE_SIZE_BITS)
     }
 }
 
 impl VirtPageNum {
     /// Get the indexes of the page table entry
+    /// 将一个 27 位的虚拟页号 (VPN) 分解成三个 9 位的索引。
+    /// 在 SV39 多级页表中，一个 27 位的 VPN 被分成三部分，每部分 9 位，分别作为一级、二级、三级页表的索引。
     pub fn indexes(&self) -> [usize; 3] {
-        let mut vpn = self.0;
-        let mut idx = [0usize; 3];
+        let mut vpn = self.0;  // 获取虚拟页号的原始 usize 值
+        let mut idx = [0usize; 3]; // 初始化一个大小为 3 的数组来存放各级索引
         for i in (0..3).rev() {
-            idx[i] = vpn & 511;
+            idx[i] = vpn & 511; // 提取当前 vpn 的最低 9 位 (511 的二进制是 9 个 1)
             vpn >>= 9;
         }
-        idx
+        idx // 返回包含三个索引的数组
     }
 }
 
@@ -175,23 +180,29 @@ impl PhysAddr {
         unsafe { (self.0 as *mut T).as_mut().unwrap() }
     }
 }
+///? 这几个设计似乎挪给 FrameTracker 更好。
 impl PhysPageNum {
     /// Get the reference of page table(array of ptes)
     pub fn get_pte_array(&self) -> &'static mut [PageTableEntry] {
         let pa: PhysAddr = (*self).into();
+        // 返回一个PTE定长数组的可变引用
         unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut PageTableEntry, 512) }
     }
     /// Get the reference of page(array of bytes)
     pub fn get_bytes_array(&self) -> &'static mut [u8] {
         let pa: PhysAddr = (*self).into();
+        // 返回一个字节数组的可变引用
         unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut u8, 4096) }
     }
     /// Get the mutable reference of physical address
     pub fn get_mut<T>(&self) -> &'static mut T {
         let pa: PhysAddr = (*self).into();
+        // 获取一个恰好放在一个物理页帧开头的、类型为 T 的数据的可变引用
         pa.get_mut()
     }
-}
+    //@ 开启分页机制之后，虽然裸指针被视为一个虚拟地址，但是由于添加了恒等映射，
+    // 虚拟地址会映射到一个相同的物理地址，因此没问题。
+}   
 
 /// iterator for phy/virt page number
 pub trait StepByOne {

@@ -100,6 +100,7 @@ pub fn rust_main() -> ! {
     clear_bss();
     kernel_log_info();
     mm::init();
+    mm::heap_allocator::heap_test();
     println!("[kernel] back to world!");
     mm::remap_test();
     trap::init();

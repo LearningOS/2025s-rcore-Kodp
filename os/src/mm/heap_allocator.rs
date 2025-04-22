@@ -4,18 +4,23 @@ use buddy_system_allocator::LockedHeap;
 
 #[global_allocator]
 /// heap allocator instance
+/// 将 buddy_system_allocator 中提供的 LockedHeap 实例化成一个全局变量，
+/// 并使用 alloc 要求的 #[global_allocator] 语义项进行标记
 static HEAP_ALLOCATOR: LockedHeap = LockedHeap::empty();
 
 #[alloc_error_handler]
 /// panic when heap allocation error occurs
+/// 内存分配失败处理：直接panic
 pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
     panic!("Heap allocation error, layout = {:?}", layout);
 }
 /// heap space ([u8; KERNEL_HEAP_SIZE])
+/// 整个heap空间 
 static mut HEAP_SPACE: [u8; KERNEL_HEAP_SIZE] = [0; KERNEL_HEAP_SIZE];
 /// initiate heap allocator
 pub fn init_heap() {
     unsafe {
+        // 给分配器一块内存用于分配
         HEAP_ALLOCATOR
             .lock()
             .init(HEAP_SPACE.as_ptr() as usize, KERNEL_HEAP_SIZE);
@@ -23,6 +28,7 @@ pub fn init_heap() {
 }
 
 #[allow(unused)]
+/// 测试heap
 pub fn heap_test() {
     use alloc::boxed::Box;
     use alloc::vec::Vec;

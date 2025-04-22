@@ -287,10 +287,13 @@ impl MapArea {
             map_perm,
         }
     }
+    /// 建立单页VPN的映射
     pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         let ppn: PhysPageNum;
+        //1. 更新data_frames
         match self.map_type {
             MapType::Identical => {
+                // 不向data_frames里推数据
                 ppn = PhysPageNum(vpn.0);
             }
             MapType::Framed => {
@@ -300,6 +303,7 @@ impl MapArea {
             }
         }
         let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
+        //2. 更新页表
         page_table.map(vpn, ppn, pte_flags);
     }
     #[allow(unused)]
@@ -336,6 +340,7 @@ impl MapArea {
     }
     /// data: start-aligned but maybe with shorter length
     /// assume that all frames were cleared before
+    /// 将数据放入物理页，一页一页的放，顺序是虚拟页递增的顺序。
     pub fn copy_data(&mut self, page_table: &mut PageTable, data: &[u8]) {
         assert_eq!(self.map_type, MapType::Framed);
         let mut start: usize = 0;
@@ -353,7 +358,7 @@ impl MapArea {
             if start >= len {
                 break;
             }
-            current_vpn.step();
+            current_vpn.step();  // +1, 一页一页的放数据
         }
     }
 }

@@ -47,6 +47,9 @@ __restore:
     # a0: *TrapContext in user space(Constant); a1: user space token
     # switch to user space
     csrw satp, a1
+# 如果修改了 `satp` 寄存器，说明内核切换到了一个与先前映射方式完全不同的页表（切换了地址空间）。
+# 此时快表里面存储的映射（用虚拟页号访问，返回物理页号）已经失效了，这种情况下内核要在紧邻修改
+#  `satp` 的指令后使用 `sfence.vma` 指令来刷新清空整个 TLB。
     sfence.vma
     csrw sscratch, a0
     mv sp, a0
