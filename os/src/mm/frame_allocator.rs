@@ -49,8 +49,8 @@ trait FrameAllocator {
 }
 /// an implementation for frame allocator
 pub struct StackFrameAllocator {
-    current: usize,
-    end: usize,
+    current: usize,  // 起始页号
+    end: usize,      // 结束页号
     recycled: Vec<usize>,
 }
 

@@ -101,7 +101,9 @@ pub fn trap_handler() -> ! {
 /// set the reg a0 = trap_cx_ptr, reg a1 = phy addr of usr page table,
 /// finally, jump to new addr of __restore asm function
 pub fn trap_return() -> ! {
-    set_user_trap_entry();
+    set_user_trap_entry();  // 每次返回时设置trap地址，保证下次就能跳过来
+    // 内核代码有可能会临时修改 stvec（例如，为了处理特定的设备中断或切换到不同的 Trap 处理逻辑）。
+    // 在返回用户空间之前重新设置 stvec，可以百分之百确定当用户程序下一次触发 Trap 时，CPU 会跳转到内核预期的、用于处理用户模式 Trap 的入口点
     let trap_cx_ptr = TRAP_CONTEXT_BASE;
     let user_satp = current_user_token();
     extern "C" {

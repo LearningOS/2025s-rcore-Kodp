@@ -11,10 +11,10 @@ SECTIONS
     .text : {
         *(.text.entry)
         . = ALIGN(4K);
-        strampoline = .;
-        *(.text.trampoline);
+        strampoline = .;  /* 定义符号 strampoline 指向 trampoline 段起始 */
+        *(.text.trampoline);  /* 放置 trampoline 代码 (__alltraps, __restore) */
         . = ALIGN(4K);
-        *(.text .text.*)
+        *(.text .text.*)   /* 放置其余内核代码 */
     }
 
     . = ALIGN(4K);

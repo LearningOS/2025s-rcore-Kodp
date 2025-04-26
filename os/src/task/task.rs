@@ -8,19 +8,19 @@ use crate::trap::{trap_handler, TrapContext};
 
 /// The task control block (TCB) of a task.
 pub struct TaskControlBlock {
-    /// Save task context
+    /// 任务切换上下文 (保存 s0-s11 和 ra)
     pub task_cx: TaskContext,
 
-    /// Maintain the execution status of the current process
+    /// 任务状态 (Ready, Running, Zombie)
     pub task_status: TaskStatus,
 
-    /// Application address space
+    /// 该任务的地址空间描述 (包含页表、非页表页)
     pub memory_set: MemorySet,
-
-    /// The phys page number of trap context
+    /// Trap 上下文所在物理页帧的物理页号 (PPN)
+    /// TrapContext 位于应用地址空间的次高虚拟页
     pub trap_cx_ppn: PhysPageNum,
 
-    /// The size(top addr) of program which is loaded from elf file
+    /// 应用占用的基础大小 (从 0x0 到用户栈结束)，从elf加载
     pub base_size: usize,
 
     /// Heap bottom

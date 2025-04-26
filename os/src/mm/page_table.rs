@@ -56,7 +56,7 @@ impl PageTableEntry {
         PTEFlags::from_bits(self.bits as u8).unwrap()
     }
     /// The page pointered by page table entry is valid?
-    pub fn is_valid(&self) -> bool {
+    pub fn is_valid(&self) -> bool {  //? 什么时候变为无效？
         (self.flags() & PTEFlags::V) != PTEFlags::empty()
     }
     /// The page pointered by page table entry is readable?
@@ -74,7 +74,11 @@ impl PageTableEntry {
 }
 
 /// page table structure
-/// 页表结构：根页号，页帧
+/// 页表结构：根页号，FrameTracker向量
+/// FrameTracker向量：这些FrameTracker里的物理页号都是页表页号，包含所有的一级、二级、三级页表页。**页号**实际上存在三级页表页内。
+/// 当页表被释放，这个向量也被释放；向量里对应的FrameTracker会释放；FrameTracker的Drop实现了对FrameTraker
+/// 自身包含的物理页号指向的物理页的释放。所以这会释放PTE指向的页.
+/// 
 pub struct PageTable {
     root_ppn: PhysPageNum,
     frames: Vec<FrameTracker>,
@@ -87,7 +91,7 @@ impl PageTable {
         let frame = frame_alloc().unwrap();
         PageTable {
             root_ppn: frame.ppn,
-            frames: vec![frame],
+            frames: vec![frame],  // root_ppn指向的一级页表放在里面
         }
     }
     /// Temporarily used to get arguments from user space.
@@ -98,10 +102,10 @@ impl PageTable {
         }
     }
     /// Find PageTableEntry by VirtPageNum, create a frame for a 4KB page table if not exist
-    /// 根据给定的虚拟页号 vpn，在多级页表树中查找对应的三级（叶子）页表项 (PTE)。
+    /// 根据给定的虚拟页号 vpn，在多级页表树中查找对应的PTE（不是物理页号）。
     /// 如果在查找过程中发现任何中间级别的页表节点不存在（即父级 PTE 无效），它会自动分配
-    /// 一个新的物理页帧来创建该节点，并更新父级 PTE 使其指向新节点。
-    /// 这个方法常用于建立新的虚拟地址映射时，确保页表路径完整。
+    /// 一个新的物理页来创建该节点，并更新父级 PTE 使其指向新节点。
+    /// !返回的页可能是无效的 
     // 1. 首先获取 `vpn` 的三级索引。
     // 2. 从根页表（一级页表，其位置由 `self.root_ppn` 给出）开始。
     // 3. 循环遍历页表层级（一级 -> 二级 -> 三级）。在每一级：
@@ -162,6 +166,7 @@ impl PageTable {
         }
         result
     }
+    /// 要求传来一个物理页号，调用者要分配一个物理页。
     /// 在当前的页表 (self) 中，为虚拟页号 VPN 建立一个到物理页号 PPN 的映射，
     /// 并设置该映射的权限和状态标志 flags。
     #[allow(unused)]
@@ -197,11 +202,14 @@ impl PageTable {
     }
     /// get the page table entry from the virtual page number
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
-        self.find_pte(vpn).map(|pte| *pte)
+        self.find_pte(vpn)
+        .map(|pte| *pte)
     }
-    /// get the token from the page table
+    /// 获取本页表的satp
     pub fn token(&self) -> usize {
+        // |Mode| ASID |  PPN |, Mode=8表示开启SV39，Umode和Smode的访存都视为39位虚拟地址。
         8usize << 60 | self.root_ppn.0
+        // https://rcore-os.cn/rCore-Tutorial-Book-v3/chapter4/3sv39-implementation-1.html#satp-layout
     }
 }
 
