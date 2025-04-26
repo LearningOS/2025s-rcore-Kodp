@@ -30,6 +30,8 @@ extern "C" {
 
 lazy_static! {
     /// The kernel's initial memory mapping(kernel address space)
+    // UPSafeCell 提供内部可变性，即避开rust不允许static mut的规定。
+    // Arc 允许多个地方持有对 UPSafeCell<MemorySet> 的共享引用
     pub static ref KERNEL_SPACE: Arc<UPSafeCell<MemorySet>> =
         Arc::new(unsafe { UPSafeCell::new(MemorySet::new_kernel()) });
 }
@@ -40,6 +42,56 @@ pub struct MemorySet {
 }
 
 impl MemorySet {
+    /// 新建并映射一个区间
+    /// ✅0 ❎-1
+    pub fn map(&mut self, start: usize, len: usize, prot: usize) -> isize {
+        let start_va = VirtAddr::from(start);
+        let end_va = VirtAddr::from(start + len);
+        let vpn_range = VPNRange::new(start_va.floor(), end_va.ceil());
+
+        for vpn in vpn_range {
+            if let Some(pte) = self.page_table.find_pte(vpn) {
+                if pte.is_valid() { return -1 }
+            }
+        }
+        let mut map_perm = MapPermission::U;
+        if prot & 1 != 0 { map_perm |= MapPermission::R }
+        if prot & 2 != 0 { map_perm |= MapPermission::W }
+        if prot & 4 != 0 { map_perm |= MapPermission::X }
+
+        println!("start_va:{:#x}, end_va:{:#x}, map_perm:{:#x}", start, start+len, map_perm);
+        // 分配记录区间
+        self.insert_framed_area(start_va, end_va, map_perm);
+        0
+    }
+    /// 取消映射一个区间并清除它
+    /// ✅0 ❎-1
+    pub fn munmap(&mut self, start:usize, len:usize) -> isize {
+        let start_va = VirtAddr::from(start);
+        let end_va = VirtAddr::from(start + len);
+        let vpn_range = VPNRange::new(start_va.floor(), end_va.ceil());
+
+        // 检测是否有问题
+        for vpn in vpn_range {
+            let pte = self.page_table.find_pte(vpn);
+            // 如果该虚拟页区间中本身就有已经被释放的页（有洞）或有虚拟页的页号失效，则返回-1表示失败
+            if pte.is_none() || !pte.unwrap().is_valid() {
+                return -1;
+            }
+        }
+        // 释放区间
+        for vpn in vpn_range {  // 遍历所给vpn范围
+            for area in &mut self.areas {  // 对于每个特定vpn，遍历每个area
+                // 如果这个vpn在area里，则释放它。
+                if vpn >= area.vpn_range.get_start() && vpn < area.vpn_range.get_end() {
+                    area.unmap_one(&mut self.page_table, vpn);  // 更好的做法是对所有area区间合并后再检查
+                }
+
+            }
+        }
+        0
+    }
+
     /// Create a new empty `MemorySet`.
     pub fn new_bare() -> Self {
         Self {
@@ -51,7 +103,10 @@ impl MemorySet {
     pub fn token(&self) -> usize {
         self.page_table.token()
     }
-    /// Assume that no conflicts.
+    /// 向当前的 MemorySet 中添加一个新的帧分配类型 (Framed) 的内存区域。
+    /// 这个区域覆盖了从 start_va 到 end_va 的虚拟地址范围，并具有指定的访问权限 permission。
+    ///@ 会为每个虚拟页号分配一个物理页。
+    ///@ 会在当前地址空间的页表中建立这些虚拟页到新分配的物理页的映射。
     pub fn insert_framed_area(
         &mut self,
         start_va: VirtAddr,

@@ -20,6 +20,7 @@ pub use memory_set::{kernel_stack_position, MapPermission, MemorySet, KERNEL_SPA
 pub use page_table::{translated_byte_buffer, PageTableEntry};
 pub use page_table::{PTEFlags, PageTable};
 pub use page_table::app_vaddr_to_paddr;
+pub use page_table::app_vaddr_to_paddr_prot;
 
 /// initiate heap allocator, frame allocator and kernel space
 pub fn init() {

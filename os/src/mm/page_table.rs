@@ -71,6 +71,10 @@ impl PageTableEntry {
     pub fn executable(&self) -> bool {
         (self.flags() & PTEFlags::X) != PTEFlags::empty()
     }
+    /// 这页用户是否可访问
+    pub fn user_available(&self) -> bool {
+        (self.flags() & PTEFlags::U) != PTEFlags::empty()
+    }
 }
 
 /// page table structure
@@ -151,7 +155,7 @@ impl PageTable {
     /// 根据给定的虚拟页号 vpn 在多级页表树中查找对应的三级（叶子）页表项 (PTE)。
     /// 如果发现任何中间级别的页表节点无效，它不会创建新的节点，
     /// 而是立即判断映射不存在，并返回 None。
-    fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
+    pub fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
         let idxs = vpn.indexes();
         let mut ppn = self.root_ppn;
         let mut result: Option<&mut PageTableEntry> = None;
@@ -244,7 +248,47 @@ pub fn app_vaddr_to_paddr(token: usize, vaddr: *const u8) -> Option<usize> {
     let va = VirtAddr::from(vaddr as usize);
     let pte = pt.find_pte(va.floor());
     match pte {
-        Some(pte) => Some(super::PhysAddr::from(pte.ppn()).0 + va.page_offset()),
+        Some(pte) => {
+            Some(super::PhysAddr::from(pte.ppn()).0 + va.page_offset())
+        }
         _ => None
     }
 }
+
+/// 内核获取当前程序的虚拟地址对应物理地址,并配合检查
+#[allow(non_snake_case)]
+pub fn app_vaddr_to_paddr_prot(token: usize, vaddr: *const u8, prot: usize) -> Option<usize> {
+    let pt = PageTable::from_token(token);
+    let va = VirtAddr::from(vaddr as usize);
+    let pte = pt.find_pte(va.floor());
+    let R = (prot >> 1) & 1;
+    let W = (prot >> 2) & 1;
+    let X = (prot >> 3) & 1;
+    println!("R, W, X: {}, {}, {}", R, W, X);
+    match pte {
+        Some(pte) => {
+            let mut r: bool = true;
+            let mut w: bool = true;
+            let mut x: bool = true;
+            if R == 1 {
+                r = pte.readable();
+            }
+            if W == 1 {
+                w = pte.writable();
+            }
+            if X == 1 {
+                x = pte.executable();
+            }
+            println!("prot: {}", prot);
+            println!("r={}, w={}, x={}", r, w, x);
+            if pte.user_available() && r && w && x && pte.is_valid() {
+                Some(super::PhysAddr::from(pte.ppn()).0 + va.page_offset())
+            }
+            else {
+                None
+            }
+        }
+        _ => None
+    }
+}
+
