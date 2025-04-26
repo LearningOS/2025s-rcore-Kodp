@@ -84,6 +84,7 @@ pub struct PageTable {
     frames: Vec<FrameTracker>,
 }
 
+
 /// Assume that it won't oom when creating/mapping.
 impl PageTable {
     /// Create a new page table
@@ -145,6 +146,7 @@ impl PageTable {
         }
         result
     }
+
     /// Find PageTableEntry by VirtPageNum
     /// 根据给定的虚拟页号 vpn 在多级页表树中查找对应的三级（叶子）页表项 (PTE)。
     /// 如果发现任何中间级别的页表节点无效，它不会创建新的节点，
@@ -234,4 +236,12 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
         start = end_va.into();
     }
     v
+}
+
+/// 内核获取当前程序的虚拟地址对应物理地址
+pub fn app_vpn_to_ppn(token: usize, vaddr: *const u8) -> usize {
+    let pt = PageTable::from_token(token);
+    let va = VirtAddr::from(vaddr as usize);
+    let ppn = pt.find_pte(va.floor()).unwrap().ppn();
+    super::PhysAddr::from(ppn).0 + va.page_offset()
 }

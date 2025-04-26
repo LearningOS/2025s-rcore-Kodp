@@ -115,7 +115,7 @@ impl TaskManager {
     }
 
     /// Get the current 'Running' task's token.
-    fn get_current_token(&self) -> usize {
+    pub fn get_current_token(&self) -> usize {
         let inner = self.inner.exclusive_access();
         inner.tasks[inner.current_task].get_user_token()
     }
