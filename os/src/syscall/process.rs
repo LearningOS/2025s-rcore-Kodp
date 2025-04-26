@@ -1,5 +1,5 @@
 //! Process management syscalls
-use crate::{mm::app_vpn_to_ppn, task::{change_program_brk, exit_current_and_run_next, suspend_current_and_run_next, TASK_MANAGER}, timer::get_time_us};
+use crate::{mm::app_vaddr_to_paddr, task::{change_program_brk, exit_current_and_run_next, get_syscall_times, suspend_current_and_run_next, TASK_MANAGER}, timer::get_time_us};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -32,9 +32,9 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
     trace!("kernel: sys_get_time");
     let us = get_time_us();
     let token = TASK_MANAGER.get_current_token();
-    let ts_phys = app_vpn_to_ppn(token, ts as *const u8, ) as *mut TimeVal;
+    let ts_paddr = app_vaddr_to_paddr(token, ts as *const u8, ).unwrap() as *mut TimeVal;
     unsafe {
-        *ts_phys = TimeVal{
+        *ts_paddr = TimeVal{
             sec: us / 1_000_000,
             usec: us % 1_000_000,
         };
@@ -44,10 +44,42 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
 
 /// TODO: Finish sys_trace to pass testcases
 /// HINT: You might reimplement it with virtual memory management.
-pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
+/// 这个系统调用有三种功能，根据 trace_request 的值不同，执行不同的操作：
+/// 如果 trace_request 为 0，则 id 应被视作 *const u8 ，表示读取当前任务 id 地址处一个字节的无符号整数值。此时应忽略 data 参数。返回值为 id 地址处的值。
+/// 如果 trace_request 为 1，则 id 应被视作 *mut u8 ，表示写入 data （作为 u8，即只考虑最低位的一个字节）到该用户程序 id 地址处。返回值应为0。
+/// 如果 trace_request 为 2，表示查询当前任务调用编号为 id 的系统调用的次数，返回值为这个调用次数。本次调用也计入统计。
+/// 在读取（trace_request 为 0）时，如果对应地址用户不可见或不可读，则返回值应为 -1（isize 格式的 -1，而非 u8）。
+/// 在写入（trace_request 为 1）时，如果对应地址用户不可见或不可写，则返回值应为 -1（isize 格式的 -1，而非 u8）。
+/// 否则，忽略其他参数，返回值为 -1。
+pub fn sys_trace(trace_request: usize, id: usize, data: usize) -> isize {
     trace!("kernel: sys_trace");
-    -1
+    // println!("kernel: sys_trace!");
+    let token = TASK_MANAGER.get_current_token();
+    let res = app_vaddr_to_paddr(token, id as *const u8); 
+    match trace_request {
+        0 => {
+            if let Some(paddr) = res {
+                unsafe { *(paddr as *const u8) as isize } 
+            } else {
+                -1 as isize
+            }
+        }
+        1 => {
+            if let Some(paddr) = res {
+                unsafe { *(paddr as *mut u8) = data as u8; 0 }
+            }
+            else {
+                -1 as isize
+            }
+        }
+        2 => {
+            let syscall_times =  get_syscall_times();
+            syscall_times[id] as isize
+        } 
+        _ => -1,
+    }
 }
+
 
 // YOUR JOB: Implement mmap.
 pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {

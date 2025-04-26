@@ -239,9 +239,12 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
 }
 
 /// 内核获取当前程序的虚拟地址对应物理地址
-pub fn app_vpn_to_ppn(token: usize, vaddr: *const u8) -> usize {
+pub fn app_vaddr_to_paddr(token: usize, vaddr: *const u8) -> Option<usize> {
     let pt = PageTable::from_token(token);
     let va = VirtAddr::from(vaddr as usize);
-    let ppn = pt.find_pte(va.floor()).unwrap().ppn();
-    super::PhysAddr::from(ppn).0 + va.page_offset()
+    let pte = pt.find_pte(va.floor());
+    match pte {
+        Some(pte) => Some(super::PhysAddr::from(pte.ppn()).0 + va.page_offset()),
+        _ => None
+    }
 }
