@@ -24,7 +24,7 @@ pub fn sys_yield() -> isize {
 
 
 
-/// YOUR JOB: get time with second and microsecond
+///TODO: get time with second and microsecond
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TimeVal`] is splitted by two pages ?
 /// tz时区，不管
@@ -42,18 +42,17 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
     0
 }
 
-/// TODO: Finish sys_trace to pass testcases
+///TODO: Finish sys_trace to pass testcases
 /// HINT: You might reimplement it with virtual memory management.
 /// 这个系统调用有三种功能，根据 trace_request 的值不同，执行不同的操作：
-///     trace_request==0，则 id 应被视作 *const u8 ，表示读取当前任务 id 地址处一个字节的无符号整数值。此时应忽略 data 参数。返回值为 id 地址处的值。
-///     trace_request==1，则 id 应被视作 *mut u8 ，表示写入 data （作为 u8，即只考虑最低位的一个字节）到该用户程序 id 地址处。返回值应为0。
+///     trace_request==0，则 id 应被视作 *const u8 ，读取当前任务 id 地址处一个字节的无符号整数值。此时应忽略 data 参数。返回值为 id 地址处的值。
+///     trace_request==1，则 id 应被视作 *mut u8 ，写入 data （作为 u8，即只考虑最低位的一个字节）到该用户程序 id 地址处。返回值应为0。
 ///     trace_request==2，表示查询当前任务调用编号为 id 的系统调用的次数，返回值为这个调用次数。本次调用也计入统计。
 /// 在读取（trace_request 为 0）时，如果对应地址用户不可见或不可读，则返回值应为 -1（isize 格式的 -1，而非 u8）。
 /// 在写入（trace_request 为 1）时，如果对应地址用户不可见或不可写，则返回值应为 -1（isize 格式的 -1，而非 u8）。
 /// 否则，忽略其他参数，返回值为 -1。
 pub fn sys_trace(trace_request: usize, id: usize, data: usize) -> isize {
     trace!("kernel: sys_trace");
-    // println!("kernel: sys_trace!");
     let token = TASK_MANAGER.get_current_token();
     let mut prot = 0;
     if trace_request == 0 {
@@ -103,7 +102,6 @@ pub fn sys_trace(trace_request: usize, id: usize, data: usize) -> isize {
 ///     5. 物理内存不足 ？
 /// 返回值：执行成功则返回 0，错误返回 -1
 pub fn sys_mmap(start: usize, len: usize, prot: usize) -> isize {
-    println!("#### sys_mmap ####");
     if (start % PAGE_SIZE != 0) || (prot & (!0x7) != 0) || (prot & 0x7 == 0) {
         return -1;
     }
@@ -111,7 +109,7 @@ pub fn sys_mmap(start: usize, len: usize, prot: usize) -> isize {
     let cur = task_manager_inner.current_task;
 
     let res =  task_manager_inner.tasks[cur].memory_set
-    .map(start, len, prot);
+        .map(start, len, prot);
     res
 }
 

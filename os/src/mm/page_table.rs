@@ -243,52 +243,37 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
 }
 
 /// 内核获取当前程序的虚拟地址对应物理地址
+/// 参考ch4 recitation 实现
 pub fn app_vaddr_to_paddr(token: usize, vaddr: *const u8) -> Option<usize> {
-    let pt = PageTable::from_token(token);
+    let app_page_table = PageTable::from_token(token);
     let va = VirtAddr::from(vaddr as usize);
-    let pte = pt.find_pte(va.floor());
-    match pte {
-        Some(pte) => {
-            Some(super::PhysAddr::from(pte.ppn()).0 + va.page_offset())
-        }
-        _ => None
-    }
+    // 如果表达式返回None，则函数在此返回None；如果表达式返回 Some(pte_value)，则 pte得到解包的pte_value
+    let pte = app_page_table.find_pte(va.floor())?;
+
+    // 如果代码执行到这里，说明 find_pte 返回了 Some，并且 pte 已解包。
+    // 计算物理地址，并将其包裹在 Some 中返回。
+    Some(super::PhysAddr::from(pte.ppn()).0 + va.page_offset())
 }
 
-/// 内核获取当前程序的虚拟地址对应物理地址,并配合检查
+/// 内核获取当前程序的虚拟地址对应物理地址,并配合检查：
+/// 如果要求某个权限但页面没有该权限，则返回 None
 #[allow(non_snake_case)]
 pub fn app_vaddr_to_paddr_prot(token: usize, vaddr: *const u8, prot: usize) -> Option<usize> {
-    let pt = PageTable::from_token(token);
+    let app_page_table = PageTable::from_token(token);
     let va = VirtAddr::from(vaddr as usize);
-    let pte = pt.find_pte(va.floor());
+    let pte = app_page_table.find_pte(va.floor())?;
+    if !pte.is_valid() || !pte.user_available() {
+        return None;
+    }
+
     let R = (prot >> 1) & 1;
     let W = (prot >> 2) & 1;
     let X = (prot >> 3) & 1;
-    println!("R, W, X: {}, {}, {}", R, W, X);
-    match pte {
-        Some(pte) => {
-            let mut r: bool = true;
-            let mut w: bool = true;
-            let mut x: bool = true;
-            if R == 1 {
-                r = pte.readable();
-            }
-            if W == 1 {
-                w = pte.writable();
-            }
-            if X == 1 {
-                x = pte.executable();
-            }
-            println!("prot: {}", prot);
-            println!("r={}, w={}, x={}", r, w, x);
-            if pte.user_available() && r && w && x && pte.is_valid() {
-                Some(super::PhysAddr::from(pte.ppn()).0 + va.page_offset())
-            }
-            else {
-                None
-            }
-        }
-        _ => None
+    if (R == 1 && !pte.readable()) 
+    || (W == 1 && !pte.writable())
+    || (X == 1 && !pte.executable()) {
+        return None;
     }
+    Some(super::PhysAddr::from(pte.ppn()).0 + va.page_offset())
 }
 

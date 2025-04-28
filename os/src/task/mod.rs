@@ -37,7 +37,7 @@ pub use context::TaskContext;
 /// existing functions on `TaskManager`.
 pub struct TaskManager {
     /// total number of tasks
-    num_app: usize,
+    pub num_app: usize,
     /// use inner value to get mutable access
     pub inner: UPSafeCell<TaskManagerInner>,
 }

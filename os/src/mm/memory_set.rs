@@ -55,7 +55,7 @@ impl MemorySet {
             }
         }
         let mut map_perm = MapPermission::U;
-        if prot & 1 != 0 { map_perm |= MapPermission::R }
+        if prot & 1 != 0 { map_perm |= MapPermission::R }  // 用户1，2，4，对应的是2，4，8
         if prot & 2 != 0 { map_perm |= MapPermission::W }
         if prot & 4 != 0 { map_perm |= MapPermission::X }
 
