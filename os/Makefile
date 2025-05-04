@@ -4,7 +4,7 @@ MODE := release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
 DISASM_TMP := target/$(TARGET)/$(MODE)/asm
-OFFLINE :=
+OFFLINE := 1
 
 # BOARD
 BOARD := qemu
@@ -55,7 +55,7 @@ clean:
 	@cargo clean
 
 disasm: kernel
-	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) | less
+	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) | bat -l asm
 
 disasm-vim: kernel
 	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) > $(DISASM_TMP)
