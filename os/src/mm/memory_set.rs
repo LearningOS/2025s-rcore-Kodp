@@ -37,6 +37,75 @@ pub struct MemorySet {
 }
 
 impl MemorySet {
+    /// 添加一个给定地址范围并分配实际的物理页帧
+    pub fn map(&mut self, start: usize, len: usize, prot: usize) -> isize {
+        let start_va = VirtAddr::from(start);
+        let end_va = VirtAddr::from(start + len);
+        let vpn_range = VPNRange::new(start_va.floor(), end_va.ceil());
+
+        // 如果新分配的区域和地址空间相交，则返回错误
+        if vpn_range.into_iter().any(|vpn| {
+            self.page_table
+                .find_pte(vpn)
+                .map_or(false, |pte| pte.is_valid())
+        }) {
+            return -1
+        }
+
+        let mut permission = MapPermission::U;
+        if prot & 1 != 0 { permission |= MapPermission::R }  // 用户 1,2,4，对应的是R,W,X
+        if prot & 2 != 0 { permission |= MapPermission::W }
+        if prot & 4 != 0 { permission |= MapPermission::X }
+
+        println!("start_va:{:#x}, end_va:{:#x}, map_perm:{:#x}", start, start+len, permission);
+
+        // 分配记录区间
+        self.insert_framed_area(start_va, end_va, permission);
+        0
+    }
+
+    /// 回收一个给定的地址范围并回收已分配的页帧
+    pub fn munmap(&mut self, start: usize, len: usize) -> isize {
+        // 1. 将 start 和 len 转换为一个虚拟页号的范围 vpn_range
+        let start_va = VirtAddr::from(start);
+        let end_va = VirtAddr::from(start + len);
+        let vpn_range = VPNRange::new(start_va.floor(), end_va.ceil());
+        
+        // 2. 逐个遍历这个范围中的每一个 vpn。
+        for vpn in vpn_range {
+            // 3. 对于每一个 vpn，它必须：
+            //  a.  找到这个 vpn 属于哪个逻辑内存区域（MapArea）。
+            //  b.  确认这个 vpn 确实在页表中有一个有效的映射。
+            //  c.  如果以上两点都满足，就执行真正的解除映射操作。
+            // 如果在整个过程中任何一个 vpn 的处理失败，整个 munmap 操作就失败。
+            let mut found = false;
+            // 尝试找到这个 vpn 对应的 MapArea
+            for area in &mut self.areas {
+                if vpn >= area.vpn_range.get_start() && vpn < area.vpn_range.get_end() {
+                    // 找到了！现在检查页表是否真的有映射
+                    let pte = self.page_table.find_pte(vpn);
+                    // 如果 MapArea 有记录，则表明该页有分配。但页表中却查不到条目，或条目
+                    // 无效，这说明内存状态出现矛盾，立即返回错误。
+                    if pte.is_none() || !pte.unwrap().is_valid() {
+                        return -1; 
+                    }
+                    
+                    // 执行释放操作
+                    area.unmap_one(&mut self.page_table, vpn);
+                    found = true;
+                    break; // 找到后立即跳出内层循环
+                }
+            }
+            // 如果内层循环结束，但还没有找到该 vpn 对应的 MapArea，则返回错误
+            // 因为在尝试 unmap 一个不属于任何 MapArea 的 vpn
+            if !found {
+                return -1;
+            }
+        }
+        // 如果所有页面都成功处理，返回 0
+        0
+    }
+
     /// Create a new empty `MemorySet`.
     pub fn new_bare() -> Self {
         Self {

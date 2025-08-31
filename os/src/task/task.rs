@@ -1,8 +1,8 @@
 //! Types related to task management & Functions for completely changing TCB
-use super::TaskContext;
+use super::{add_task, suspend_current_and_run_next, TaskContext};
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
 use crate::config::TRAP_CONTEXT_BASE;
-use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
+use crate::mm::{memory_set, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
@@ -37,6 +37,12 @@ impl TaskControlBlock {
 }
 
 pub struct TaskControlBlockInner {
+    /// 优先级
+    pub priority: isize,
+
+    /// 已经“走”了多远。
+    pub stride: isize,
+
     /// The physical page number of the frame where the trap context is placed
     pub trap_cx_ppn: PhysPageNum,
 
@@ -108,6 +114,8 @@ impl TaskControlBlock {
             kernel_stack,
             inner: unsafe {
                 UPSafeCell::new(TaskControlBlockInner {
+                    priority: 16,
+                    stride: 0,
                     trap_cx_ppn,
                     base_size: user_sp,
                     task_cx: TaskContext::goto_trap_return(kernel_stack_top),
@@ -131,6 +139,57 @@ impl TaskControlBlock {
             trap_handler as usize,
         );
         task_control_block
+    }
+
+    /// 根据 ELF 数据创建进程，设置父子关系。
+    pub fn spawn(self: &Arc<Self>, elf_data: &[u8]) -> Arc<Self> {
+        // 据新的 ELF 数据获取新地址空间、新用户栈顶地址、新程序入口点
+        let mut parent_inner = self.inner_exclusive_access();
+        let (memory_set, user_sp, entry_point) =
+            MemorySet::from_elf(elf_data);
+        let trap_cx_ppn = memory_set
+            .translate(VirtAddr::from(TRAP_CONTEXT_BASE).into())
+            .unwrap()
+            .ppn();
+        let pid_handle = pid_alloc();
+        let kernel_stack = kstack_alloc();
+        let kernel_stack_top = kernel_stack.get_top();
+
+        // 创建 TCB
+        let tcb = Arc::new(TaskControlBlock{
+            pid: pid_handle,
+            kernel_stack,
+            inner: unsafe {
+                UPSafeCell::new(TaskControlBlockInner{
+                    priority: 16,
+                    stride: 0,
+                    trap_cx_ppn,
+                    base_size: user_sp,
+                    task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+                    task_status: TaskStatus::Ready,
+                    memory_set,
+                    parent: Some(Arc::downgrade(self)), // 弱引用父进程
+                    children: Vec::new(),
+                    exit_code: 0,
+                    heap_bottom: user_sp,
+                    program_brk: user_sp,
+                })
+            },
+        });
+        parent_inner.children.push(tcb.clone());  // 父进程添加子进程
+        
+        // 设置 TrapContext
+        // - 之前 from_elf 不含 TrapContext 部分的设置，但 from_existed_user 由于
+        //   程序之前设置了 TrapContext，于是会被拷贝过来。
+        let trap_cx = tcb.inner_exclusive_access().get_trap_cx();
+        *trap_cx = TrapContext::app_init_context(
+            entry_point, 
+            user_sp, 
+            KERNEL_SPACE.exclusive_access().token(), 
+            kernel_stack_top, 
+            trap_handler as usize,
+        );
+        tcb
     }
 
     /// Load a new elf to replace the original application address space and start execution
@@ -181,6 +240,8 @@ impl TaskControlBlock {
             kernel_stack,
             inner: unsafe {
                 UPSafeCell::new(TaskControlBlockInner {
+                    priority: 16,
+                    stride: 0,
                     trap_cx_ppn,
                     base_size: parent_inner.base_size,
                     task_cx: TaskContext::goto_trap_return(kernel_stack_top),

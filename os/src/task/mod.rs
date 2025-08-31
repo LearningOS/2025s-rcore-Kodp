@@ -13,6 +13,8 @@
 //!
 //! Be careful when you see `__switch` ASM function in `switch.S`. Control flow around this function
 //! might not be what you expect.
+
+pub use manager::TASK_MANAGER;
 mod context;
 mod id;
 mod manager;
