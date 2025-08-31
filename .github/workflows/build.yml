@@ -40,6 +40,15 @@ jobs:
           rm ${CARGO_HOME}/config.toml || true
           rm -rf rm ${CARGO_HOME}/registry/* || true
       - uses: actions/checkout@v4
+
+      # ⬇️⬇️⬇️ 新增的步驟：在這裡統一安裝並固定 Rust 版本 ⬇️⬇️⬇️
+      - name: Install specific Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: nightly-2024-02-25
+          targets: riscv64gc-unknown-none-elf
+      # ⬆️⬆️⬆️ 以上是新增的核心部分 ⬆️⬆️⬆️
+
       - name: Run tests
         run: |
           qemu-system-riscv64 --version
