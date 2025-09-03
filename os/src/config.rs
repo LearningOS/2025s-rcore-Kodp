@@ -1,4 +1,4 @@
-//! Constants in the kernel
+//! 内核中的常量
 
 #[allow(unused)]
 
@@ -9,17 +9,32 @@ pub const KERNEL_STACK_SIZE: usize = 4096 * 2;
 /// kernel heap size
 pub const KERNEL_HEAP_SIZE: usize = 0x200_0000;
 
-/// page size : 4KB
+/// page size: 4KB
 pub const PAGE_SIZE: usize = 0x1000;
 /// page size bits: 12
 pub const PAGE_SIZE_BITS: usize = 0xc;
-/// the virtual addr of trapoline
+/// the max number of syscall
+pub const MAX_SYSCALL_NUM: usize = 500;
+
+/// the virtual addr of trampoline
+/// 虚拟地址最高页面
 pub const TRAMPOLINE: usize = usize::MAX - PAGE_SIZE + 1;
+
 /// the virtual addr of trap context
+/// 虚拟地址次高页面 
 pub const TRAP_CONTEXT_BASE: usize = TRAMPOLINE - PAGE_SIZE;
+
 /// clock frequency
+/// 预先获取到的时钟频率。
 pub const CLOCK_FREQ: usize = 12500000;
 /// the physical memory end
 pub const MEMORY_END: usize = 0x88000000;
+
 /// The base address of control registers in Virtio_Block device
+/// Memory Mapped I/O， 把设备的内容映射到物理内存地址空间
+/// 在 qemu 平台上， Virtio_Block 设备的控制寄存器基地址是 0x10001000，
+/// 大小是 0x1000 字节（4KB）。
 pub const MMIO: &[(usize, usize)] = &[(0x10001000, 0x1000)];
+
+/// 已走的步长
+pub const BIG_STRIDE: isize = 0x3f3f3f3f;

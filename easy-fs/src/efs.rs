@@ -13,13 +13,17 @@ pub struct EasyFileSystem {
     pub inode_bitmap: Bitmap,
     ///Data bitmap
     pub data_bitmap: Bitmap,
-    inode_area_start_block: u32,
-    data_area_start_block: u32,
+    /// 1
+    pub inode_area_start_block: u32,
+    /// 2
+    pub data_area_start_block: u32,
 }
 
 type DataBlock = [u8; BLOCK_SZ];
 /// An easy fs over a block device
 impl EasyFileSystem {
+
+
     /// A data block of block size
     pub fn create(
         block_device: Arc<dyn BlockDevice>,
@@ -147,5 +151,10 @@ impl EasyFileSystem {
             &self.block_device,
             (block_id - self.data_area_start_block) as usize,
         )
+    }
+
+    /// 回收 inode id
+    pub fn dealloc_inode(&mut self, inode_id: u32) {
+        self.inode_bitmap.dealloc(&self.block_device, inode_id as usize);
     }
 }

@@ -1,15 +1,14 @@
-//! Implementation of [`TaskContext`]
+//! 实现 TaskContext
 use crate::trap::trap_return;
-
 #[repr(C)]
 /// task context structure containing some registers
 pub struct TaskContext {
-    /// Ret position after task switching
+    /// return position after task switching
     ra: usize,
-    /// Stack pointer
+    /// stack pointer
     sp: usize,
-    /// s0-11 register, callee saved
-    s: [usize; 12],
+    /// S0-11 register, callee saved
+    s: [usize; 12]
 }
 
 impl TaskContext {
@@ -21,7 +20,13 @@ impl TaskContext {
             s: [0; 12],
         }
     }
-    /// Create a new task context with a trap return addr and a kernel stack pointer
+    /// 构造一个 TaskContext：
+    /// - 返回地址 ra 为 trap_return
+    /// - 栈地址为内核栈上用户 TrapContext 的地址
+    /// 
+    /// 使得任务调度器在第一次执行 __switch 时，
+    /// 执行流能够进入 trap_return，进而完成从内核态到用户态的切换。
+    /// 最终开始执行应用程序第一行代码。
     pub fn goto_trap_return(kstack_ptr: usize) -> Self {
         Self {
             ra: trap_return as usize,
