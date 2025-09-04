@@ -24,14 +24,27 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./os/target/riscv64gc-unknown-none-elf/doc
           destination_dir: ${{ github.ref_name }}
+
   basic-test:
     runs-on: ubuntu-latest
     outputs:
-      points: ${{ steps.end.outputs.points}}
+      points: ${{ steps.end.outputs.points }}
     container:
       image: duskmoon/dev-env:rcore-ci
     steps:
       - uses: actions/checkout@v4
+
+      - name: Override Cargo source (use TUNA mirror)
+        run: |
+          mkdir -p ~/.cargo
+          cat > ~/.cargo/config.toml <<EOF
+          [source.crates-io]
+          replace-with = "tuna"
+
+          [source.tuna]
+          registry = "https://mirrors.tuna.tsinghua.edu.cn/git/crates.io-index.git"
+          EOF
+
       - name: Run tests
         run: |
           qemu-system-riscv64 --version
@@ -40,14 +53,15 @@ jobs:
           git clone https://github.com/LearningOS/rCore-Tutorial-Checker-2025S.git ci-user
           git clone https://github.com/LearningOS/rCore-Tutorial-Test-2025S.git ci-user/user
           ID=`git rev-parse --abbrev-ref HEAD | grep -oP 'ch\K[0-9]'`
-          # cd ci-user && make test CHAPTER=$ID passwd=${{ secrets.BASE_TEST_TOKEN }}
           cd ci-user && make test CHAPTER=$ID passwd=${{ secrets.BASE_TEST_TOKEN }} > ../output.txt
           cat ../output.txt
+
       - name: end
         id: end
         run: |
           cat output.txt | grep -a "Test passed" | grep -oP "\d{1,}/\d{1,}" | xargs -i echo "points={}"
           cat output.txt | grep -a "Test passed" | grep -oP "\d{1,}/\d{1,}" | xargs -i echo "points={}" >> $GITHUB_OUTPUT
+
   deploy:
     if: github.repository != 'LearningOS/rCore-Camp-Code-2025S'
     name: Deploy to pages
@@ -59,11 +73,13 @@ jobs:
         continue-on-error: true
         with:
           ref: 'gh-pages'
+
       - name: Save Log File
         uses: yfblock/multi-rank-log@main
         with:
           public-dir: classroom
           points: ${{ needs.basic-test.outputs.points }}
+
       - name: GitHub Pages
         uses: crazy-max/ghaction-github-pages@v3
         with:
@@ -72,6 +88,7 @@ jobs:
           keep_history: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: check score
         env:
           course_id: ${{ secrets.RCORE_2025_SPRING_COURSE_ID }}
@@ -84,7 +101,6 @@ jobs:
 
           github_user="${{ github.actor }}"
 
-          # 生成 JSON 结果
           score_json=$(jq -n \
             --arg channel "github" \
             --argjson courseId "$course_id" \
@@ -93,18 +109,18 @@ jobs:
             --argjson totalScore 500 \
             '{channel: $channel, courseId: $courseId, name: $name, score: $score, totalScore: $totalScore}')
 
-            response=$(curl -X POST $post_api \
+          response=$(curl -X POST $post_api \
             -H "accept: application/json;charset=utf-8" \
             -H "Content-Type: application/json" \
             -H "token: $token" \
             -d "$score_json" \
             -v)
 
-            echo "Response: $response"
+          echo "Response: $response"
 
-            if echo "$response" | grep -q '"result":1'; then
+          if echo "$response" | grep -q '"result":1'; then
             echo "Success: The result field contains 1."
-            else
+          else
             echo "Error: The result field does not contain 1."
             exit 1
-            fi
+          fi
