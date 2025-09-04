@@ -37,6 +37,13 @@ jobs:
 
       - name: Run tests
         run: |
+          mkdir -p ~/.cargo
+          cat > ~/.cargo/config.toml <<EOL
+          [source.crates-io]
+          replace-with = "tuna"
+          [source.tuna]
+          registry = "https://mirrors.tuna.tsinghua.edu.cn/git/crates.io-index.git"
+          EOL
           qemu-system-riscv64 --version
           rustup target add riscv64gc-unknown-none-elf
           git config --global --add safe.directory /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}
