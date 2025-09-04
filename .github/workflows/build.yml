@@ -34,17 +34,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Override Cargo source (use TUNA mirror)
-        run: |
-          mkdir -p ~/.cargo
-          cat > ~/.cargo/config.toml <<EOF
-          [source.crates-io]
-          replace-with = "tuna"
-
-          [source.tuna]
-          registry = "https://mirrors.tuna.tsinghua.edu.cn/git/crates.io-index.git"
-          EOF
-
       - name: Run tests
         run: |
           qemu-system-riscv64 --version
@@ -52,9 +41,18 @@ jobs:
           git config --global --add safe.directory /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}
           git clone https://github.com/LearningOS/rCore-Tutorial-Checker-2025S.git ci-user
           git clone https://github.com/LearningOS/rCore-Tutorial-Test-2025S.git ci-user/user
+
+          # --- 使用环境变量强制指定镜像源 ---
+          export CARGO_SOURCE_CRATES_IO_REPLACE_WITH='tuna'
+          export CARGO_REGISTRIES_TUNA_INDEX='https://mirrors.tuna.tsinghua.edu.cn/git/crates.io-index.git'
+          # --- 结束 ---
+
           ID=`git rev-parse --abbrev-ref HEAD | grep -oP 'ch\K[0-9]'`
           cd ci-user && make test CHAPTER=$ID passwd=${{ secrets.BASE_TEST_TOKEN }} > ../output.txt
           cat ../output.txt
+
+      - name: end
+        # ... 后续步骤不变 ...
 
       - name: end
         id: end
