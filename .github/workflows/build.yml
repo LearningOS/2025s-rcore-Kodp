@@ -53,9 +53,6 @@ jobs:
           cat ../output.txt
 
       - name: end
-        # ... 后续步骤不变 ...
-
-      - name: end
         id: end
         run: |
           cat output.txt | grep -a "Test passed" | grep -oP "\d{1,}/\d{1,}" | xargs -i echo "points={}"
