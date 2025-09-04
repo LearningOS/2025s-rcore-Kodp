@@ -59,9 +59,20 @@ lazy_static! {
 /// List all apps in the root directory
 pub fn list_apps() {
     println!("/**** APPS ****");
-    for app in ROOT_INODE.ls() {
+
+    // 1. 从根目录获取所有应用程序的名称列表。
+    //    注意：这里需要将 `apps` 声明为 `mut` (可变)，因为排序操作会直接修改它。
+    let mut apps = ROOT_INODE.ls();
+
+    // 2. 对列表进行排序（按字典序从小到大）。
+    //    .sort() 是 Vec 类型的标准方法，会直接在原向量上进行排序。
+    apps.sort();
+
+    // 3. 遍历排序后的列表并打印。
+    for app in apps {
         println!("{}", app);
     }
+    
     println!("**************/");
 }
 
